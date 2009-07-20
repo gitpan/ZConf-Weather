@@ -1,5 +1,9 @@
 Revision history for ZConf-Weather
 
+0.0.1	2009-03-30/1:00
+		-'new' now properly checks for the existence of 'weather' instead
+			of looking for 'bookmarks'.
+
 0.0.0   2009-03-02/6:30
         -Initial release.
 

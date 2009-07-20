@@ -12,11 +12,11 @@ ZConf::Weather -
 
 =head1 VERSION
 
-Version 0.0.0
+Version 0.0.1
 
 =cut
 
-our $VERSION = '0.0.0';
+our $VERSION = '0.0.1';
 
 
 =head1 SYNOPSIS
@@ -103,7 +103,7 @@ sub new{
 
 	#create the config if it does not exist
 	#if it does exist, make sure the set we are using exists
-    $self->{init} = $self->{zconf}->configExists("bookmarks");
+    $self->{init} = $self->{zconf}->configExists("weather");
 	if($self->{zconf}->{error}){
 		warn("ZConf-Weather new:2: Could not check if the config 'weather' exists.".
 			 " It failed with '".$self->{zconf}->{error}."', '"
@@ -236,7 +236,6 @@ sub getDefaultType{
 
 	return $self->{zconf}->{conf}{weather}{defaultLocal};
 }
-
 
 =head2 getSet
 
@@ -403,7 +402,7 @@ sub listLocals{
 			 ' ZConf error="'.$self->{zconf}->{error}.'" '.
 			 'ZConf error string="'.$self->{zconf}->{errorString}.'"');
 		$self->{error}=2;
-		$self->{errorString}='ZConf error listing sets for the config "weather".'.
+		$self->{errorString}='ZConf error listing locals for the config "weather".'.
 			                 ' ZConf error="'.$self->{zconf}->{error}.'" '.
 			                 'ZConf error string="'.$self->{zconf}->{errorString}.'"';
 		return undef;
@@ -438,7 +437,7 @@ sub listSets{
 	my $self=$_[0];
 
 	#blanks any previous errors
-	$self->errorBlank;
+	$self->errorblank;
 
 	my @sets=$self->{zconf}->getAvailableSets('weather');
 	if($self->{zconf}->{error}){
@@ -477,7 +476,7 @@ sub listTemplates{
 			 ' ZConf error="'.$self->{zconf}->{error}.'" '.
 			 'ZConf error string="'.$self->{zconf}->{errorString}.'"');
 		$self->{error}=2;
-		$self->{errorString}='ZConf error listing sets for the config "weather".'.
+		$self->{errorString}='ZConf error listing templates for the config "weather".'.
 			                 ' ZConf error="'.$self->{zconf}->{error}.'" '.
 			                 'ZConf error string="'.$self->{zconf}->{errorString}.'"';
 		return undef;
@@ -558,7 +557,7 @@ sub readSet{
 
 	
 	#blanks any previous errors
-	$self->errorBlank;
+	$self->errorblank;
 
 	$self->{zconf}->read({config=>'weather', set=>$set});
 	if ($self->{zconf}->{error}) {
@@ -665,7 +664,7 @@ sub run{
 
 		#processes each one
 		foreach (@$arrayref) {
-			print $tobj->fill_in(ata_hash=>%{$_},template=>$t);
+			print $tobj->fill_in(data_hash=>%{$_},template=>$t);
 		}
 		return 1;
 	}
@@ -862,7 +861,7 @@ sub templateExists{
 
 	my @templates=$self->listTemplates;
 	if ($self->{error}) {
-		warn('ZConf-Weather listTemplates:2: listTemplates errored');
+		warn('ZConf-Weather templateExists: listTemplates errored');
 		return undef;
 	}
 
