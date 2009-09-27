@@ -1,5 +1,12 @@
 Revision history for ZConf-Weather
 
+0.1.1	2009-09/01:00
+		-Correct the manifest.
+
+0.1.0	2009-09-27/0:35
+		-'getWeather' and 'getWeatherObj' added.
+		-'run' reworked to use the newly added functions.
+
 0.0.1	2009-03-30/1:00
 		-'new' now properly checks for the existence of 'weather' instead
 			of looking for 'bookmarks'.

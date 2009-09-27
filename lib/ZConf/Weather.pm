@@ -8,16 +8,15 @@ use strict;
 
 =head1 NAME
 
-ZConf::Weather - 
+ZConf::Weather - A ZConf module for fetching weather information.
 
 =head1 VERSION
 
-Version 0.0.1
+Version 0.1.1
 
 =cut
 
-our $VERSION = '0.0.1';
-
+our $VERSION = '0.1.1';
 
 =head1 SYNOPSIS
 
@@ -306,6 +305,104 @@ sub getTemplate{
 	return $self->{zconf}{conf}{weather}{'templates/'.$template};
 }
 
+=head2 getWeather
+
+Returns the arrayref from Weather::Underground->get_weather.
+
+The only arguement required is the name of the local.
+
+    $aref=$zcw->getWeather('someLocal');
+    if($zcw->{error}){
+        print "Error!\n";
+    }
+
+=cut
+
+sub getWeather{
+	my $self=$_[0];
+	my $name=$_[1];
+
+	$self->errorblank;
+
+	#inits the weather object...
+	my $weather=$self->getWeatherObj($name);
+
+	#gets the weather
+	my $arrayref = $weather->get_weather();
+	if (!$arrayref) {
+		$self->{error}=12;
+		$self->{errorString}='Failed to fetch the weather';
+		warn('ZConf-Weather getWeather:12: '.$self->{errorString});
+		return undef;
+	}
+
+	return $arrayref;
+}
+
+=head2 getWeatherObj
+
+This fetches the Weather::Underground object.
+
+The only arguement accepted is the name of the local.
+
+    my $wu=$zcw->getWeatherObj('someLocal');
+    if($zcw->{error}){
+        print "Error!";
+    }
+
+=cut
+
+sub getWeatherObj{
+	my $self=$_[0];
+	my $name=$_[1];
+
+	$self->errorblank;
+
+	#error if no local is defined
+	if (!defined($name)) {
+		$name=$self->getDefaultLocal;
+		if ($self->{error}) {
+			$self->{error}=16;
+			$self->{errorString}='getDefaultLocal errors and no local is specified.';
+			warn('ZConf-Weather getWeatherObj:16: '.$self->{errorString});
+			return undef;
+		}
+	}
+
+	#local exists errored
+	my $returned=$self->localExists($name);
+	if ($self->{error}) {
+		warn('ZConf-Weather getWeatherObj: localExists errored');
+		return undef;
+	}
+
+	if (!$returned) {
+		$self->{error}=10;
+		$self->{errorString}='The local "'.$name.'" does not exist.';
+		warn('ZConf-Weather getWeatherObj:10: '.$self->{errorString});
+		return undef;
+	}
+
+	#gets the keys for that will be used
+	my $local=$self->{zconf}->{conf}{weather}{'locals/'.$name.'/local'};
+    my $type=$self->{zconf}->{conf}{weather}{'locals/'.$name.'/type'};
+	my $template;
+	if ($type eq 'template') {
+		$template=$self->{zconf}->{conf}{weather}{'locals/'.$name.'/template'};
+	}
+
+	#inits the weather object...
+	my $weather=Weather::Underground->new(place=>$local);
+	if (!$weather) {
+		$self->{error}=11;
+		$self->{errorString}='Failed to init the module Weather::Underground.';
+		return undef;
+		warn('ZConf-Weather getWeatherObj:11: '.$self->{errorString});
+	}
+
+	return $weather;
+}
+
 =head2 init
 
 This initializes it or a new set.
@@ -589,28 +686,24 @@ sub run{
 	my $self=$_[0];
 	my $name=$_[1];
 
-	#error if no local is defined
+	#blank any previous errors
+	$self->errorblank;
+
+	#try to get it if no local is given
 	if (!defined($name)) {
 		$name=$self->getDefaultLocal;
 		if ($self->{error}) {
-			warn('ZConf-Weather run:16: getDefaultLocal errors and no local is specified');
-			$self->{error}=16;
-			$self->{errorString}='getDefaultLocal errors and no local is specified.';
+			warn('ZConf-Weather run: No local was given and getDefaultLocal failed.');
 			return undef;
 		}
 	}
 
-	#local exists errored
-	my $returned=$self->localExists($name);
-	if ($self->{error}) {
-		warn('ZConf-Weather run: localExists errored');
-		return undef;
-	}
-
-	if (!$returned) {
-		warn('ZConf-Weather run:10: The local "'.$name.'" does not exist');
-		$self->{error}=10;
-		$self->{errorString}='The local "'.$name.'" does not exist.';
+	#gets the weather
+	my $arrayref = $self->getWeather($name);
+	if (!$arrayref) {
+		warn('ZConf-Weather run:12: Failed to fetch the weather');
+		$self->{error}=12;
+		$self->{errorString}='Failed to fetch the weather';
 		return undef;
 	}
 
@@ -620,24 +713,6 @@ sub run{
 	my $template;
 	if ($type eq 'template') {
 		$template=$self->{zconf}->{conf}{weather}{'locals/'.$name.'/template'};
-	}
-
-	#inits the weather object...
-	my $weather=Weather::Underground->new(place=>$local);
-	if (!$weather) {
-		warn('ZConf-Weather run:11: Failed to init the module Weather::Underground');
-		$self->{error}=11;
-		$self->{errorString}='Failed to init the module Weather::Underground.';
-		return undef;
-	}
-
-	#gets the weather
-	my $arrayref = $weather->get_weather();
-	if (!$arrayref) {
-		warn('ZConf-Weather run:12: Failed to fetch the weather');
-		$self->{error}=12;
-		$self->{errorString}='Failed to fetch the weather';
-		return undef;
 	}
 
 	#handles if if the type is set to dump
@@ -898,7 +973,7 @@ sub errorblank{
         return 1;
 }
 
-=head2 ERROR CODES
+=head1 ERROR CODES
 
 =head2 1
 

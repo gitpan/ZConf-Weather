@@ -5,3 +5,4 @@ README
 lib/ZConf/Weather.pm
 t/00-load.t
 t/pod.t
+bin/zcweather
