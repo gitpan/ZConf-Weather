@@ -12,11 +12,11 @@ ZConf::Weather - A ZConf module for fetching weather information.
 
 =head1 VERSION
 
-Version 0.1.1
+Version 1.0.0
 
 =cut
 
-our $VERSION = '0.1.1';
+our $VERSION = '1.0.0';
 
 =head1 SYNOPSIS
 
@@ -33,24 +33,13 @@ This initializes it.
 
 One arguement is taken and that is a hash value.
 
+If this function errors, it will will be set permanently.
+
 =head3 hash values
-
-=head2 autoinit
-
-If this is set to true, it will automatically call
-init the set and config. If this is set to false or
-not defined, besure to check '$zcw->{init}' to see
-if the config/module has been initiated or not.
-
-If it is not specified, it will default to true.
-
-=head2 set
-
-This is the set to load initially.
 
 =head4 zconf
 
-If this key is defined, this hash will be passed to ZConf->new().
+This is the a ZConf object.
 
     my $zcw=ZConf::Weather->new();
     if($zcw->{error}){
@@ -64,122 +53,96 @@ sub new{
 	if(defined($_[1])){
 		%args= %{$_[1]};
 	}
+	my $function='new';
 
-	my $self={error=>undef, errorString=>undef};
+	my $self={error=>undef,
+			  perror=>undef,
+			  errorString=>undef,
+			  module=>'ZConf-Weather',
+			  zconfconfig=>'weather',
+			  };
 	bless $self;
 
-	#this sets the set to undef if it is not defined
-	if (!defined($args{set})) {
-		$self->{set}=undef;
-	}else {
-		$self->{set}=$args{set};
-	}
-
-	#this sets the set to 1 if it is not defined
-	if (!defined($args{autoinit})) {
-		$self->{autoinit}=1;
-	}else {
-		$self->{autoinit}=$args{set};
-	}
-
-	#this is done to keep from throwing an error when we try to pass it to ZConf->new
+	#get the ZConf object
 	if (!defined($args{zconf})) {
-		$args{zconf}={};
+		#creates the ZConf object
+		$self->{zconf}=ZConf->new();
+		if(defined($self->{zconf}->{error})){
+			$self->{error}=1;
+			$self->{perror}=1;
+			$self->{errorString}="Could not initiate ZConf. It failed with '"
+			                     .$self->{zconf}->{error}."', '".
+			                     $self->{zconf}->{errorString}."'";
+			warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
+			return $self;
+		}
+	}else {
+		$self->{zconf}=$args{zconf};
 	}
 
-	#creates the ZConf object
-	$self->{zconf}=ZConf->new(%{$args{zconf}});
-	if(defined($self->{zconf}->{error})){
-		warn("ZConf-Weather new:1: Could not initiate ZConf. It failed with '"
-			 .$self->{zconf}->{error}."', '".$self->{zconf}->{errorString}."'");
-		$self->{error}=1;
-		$self->{errorString}="Could not initiate ZConf. It failed with '"
-		                      .$self->{zconf}->{error}."', '".
-							  $self->{zconf}->{errorString}."'";
-		return $self;
-	}
 
 
 	#create the config if it does not exist
 	#if it does exist, make sure the set we are using exists
-    $self->{init} = $self->{zconf}->configExists("weather");
+    my $returned = $self->{zconf}->configExists("weather");
 	if($self->{zconf}->{error}){
-		warn("ZConf-Weather new:2: Could not check if the config 'weather' exists.".
-			 " It failed with '".$self->{zconf}->{error}."', '"
-			 .$self->{zconf}->{errorString}."'");
 		$self->{error}=2;
-		$self->{errorString}="Could not check if the config 'weather' exists.".
-	   		                 " It failed with '".$self->{zconf}->{error}."', '"
-			                 .$self->{zconf}->{errorString}."'";
+		$self->{perror}=1;
+		$self->{errorString}="Checking if '".$self->{zconfconfig}."' exists failed. error='".
+                             $self->{zconf}->{error}."', errorString='".
+                             $self->{zconf}->{errorString}."'";
+		warn($self->{module}.' '.$function.':'.$self->{error}.':'.$self->{errorString});
 		return $self;
 	}
 
-	#if it is not inited, check to see if it needs to do so
-	if ((!$self->{init}) && $self->{autoinit}) {
-		$self->init($self->{set});
-		if ($self->{error}) {
-			warn('ZConf-Weather new:4: Autoinit failed.');
-		}else {
-			#if init works, it is now inited and thus we set it to one
-			$self->{init}=1;
-		}
-		#we don't set any error stuff here even if the above action failed...
-		#it will have been set any ways by init methode
-		return $self;
-	}
-
-	#checks it is set to use the default set
-	#use defined as '0' is a legit set name and is a perl boolean for false
-	if ((!defined($self->{set})) && $self->{init}) {
-		$self->{init}=$self->{zconf}->defaultSetExists('weather');
-		if($self->{zconf}->{error}){
-			warn("ZConf-Weather new:2: defaultSetExists failed for 'weather'.".
-				 " It failed with '".$self->{zconf}->{error}."', '"
-				 .$self->{zconf}->{errorString}."'");
-			$self->{error}=2;
-			$self->{errorString}="defaultSetExists failed for 'weather'.".
-	   		                 " It failed with '".$self->{zconf}->{error}."', '"
-			                 .$self->{zconf}->{errorString}."'";
+	#initiate the config if it does not exist
+	if (!$returned) {
+		#init it
+		$self->init;
+		if ($self->{zconf}->{error}) {
+			$self->{perror}=1;
+			$self->{errorString}='Init failed.';
+			warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 			return $self;
 		}
-	}
-
-	#check it if it set to use a specific set
-	#use defined as '0' is a legit set name and is a perl boolean for false
-	if (defined($self->{set})) {
-		$self->{init}=$self->{zconf}->setExists('weather', $self->{set});
-		if($self->{zconf}->{error}){
-			warn("ZConf-Weather new:2: defaultSetExists failed for 'weather'.".
-				 " It failed with '".$self->{zconf}->{error}."', '"
-				 .$self->{zconf}->{errorString}."'");
+	}else {
+		#if we have a set, make sure we also have a set that will be loaded
+		$returned=$self->{zconf}->defaultSetExists($self->{zconfconfig});
+		if ($self->{zconf}->{error}) {
 			$self->{error}=2;
-			$self->{errorString}="defaultSetExists failed for 'weather'.".
-	   		                 " It failed with '".$self->{zconf}->{error}."', '"
-			                 .$self->{zconf}->{errorString}."'";
+			$self->{perror}=1;
+			$self->{errorString}="Checking if '".$self->{zconfconfig}."' exists failed. error='".
+			                     $self->{zconf}->{error}."', errorString='".
+			                     $self->{zconf}->{errorString}."'";
+			warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 			return $self;
 		}
+
+		#if we don't have a default set, initialize it
+		if (!$returned) {
+			#init it
+			$self->init;
+			if ($self->{zconf}->{error}) {
+				$self->{perror}=1;
+				$self->{errorString}='Init failed.';
+				warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
+				return $self;
+			}
+		}
 	}
 
-	#the first one does this if the config has not been done yet
-	#this one does it if the set has not been done yet
-	#if it is not inited, check to see if it needs to do so
-	if (!$self->{init} && $self->{autoinit}) {
-		$self->init($self->{set});
-		if ($self->{error}) {
-			warn('ZConf-Weather new:4: Autoinit failed.');
-		}else {
-			#if init works, it is now inited and thus we set it to one
-			$self->{init}=1;
-		}
-		#we don't set any error stuff here even if the above action failed...
-		#it will have been set any ways by init methode
+	#read the config
+	$self->{zconf}->read({config=>$self->{zconfconfig}});
+	if ($self->{zconf}->{error}) {
+		$self->{error}=1;
+		$self->{perror}=1;
+		$self->{errorString}="Reading the ZConf config '".$self->{zconfconfig}."' failed. error='".
+		                     $self->{zconf}->{error}."', errorString='".
+		                     $self->{zconf}->{errorString}."'";
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return $self;
 	}
 
-	#reads it if it does not need to be initiated
-	if ($self->{init}) {
-		$self->{zconf}->read({set=>$self->{set}, config=>'weather'});
-	}
 
 	return $self;
 }
@@ -197,13 +160,17 @@ This gets what the default local is set to.
 
 sub getDefaultLocal{
 	my $self=$_[0];
+	my $function='getDefaultLocal';
 
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	if (!defined($self->{zconf}->{conf}{weather}{defaultLocal})) {
-		warn('ZConf-Weather getDefaultLocal:15: No default local specified');
 		$self->{error}=15;
 		$self->{errorString}='No default local specified.';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -223,13 +190,17 @@ This gets what the default type is set to.
 
 sub getDefaultType{
 	my $self=$_[0];
+	my $function='getDefaultType';
 
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	if (!defined($self->{zconf}->{conf}{weather}{defaultType})) {
-		warn('ZConf-Weather getDefaultType:15: No default type specified');
 		$self->{error}=15;
 		$self->{errorString}='No default type specified.';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -249,16 +220,20 @@ This gets what the current set is.
 
 sub getSet{
 	my $self=$_[0];
+	my $function='getSet';
+
+	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	my $set=$self->{zconf}->getSet('weather');
 	if($self->{zconf}->{error}){
-		warn('ZConf-Weather getSet:2: ZConf error getting the loaded set the config "weather".'.
-			 ' ZConf error="'.$self->{zconf}->{error}.'" '.
-			 'ZConf error string="'.$self->{zconf}->{errorString}.'"');
 		$self->{error}=2;
 		$self->{errorString}='ZConf error getting the loaded set the config "weather".'.
 			                 ' ZConf error="'.$self->{zconf}->{error}.'" '.
 			                 'ZConf error string="'.$self->{zconf}->{errorString}.'"';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -279,13 +254,17 @@ This returns a template as a string.
 sub getTemplate{
 	my $self=$_[0];
 	my $template=$_[1];
+	my $function='getTemplate';
 
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	if (!defined($template)) {
-		warn('ZConf-Weather getTemplate:6: No template specified');
 		$self->{error}=6;
 		$self->{errorstring}='No template specified.';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -299,6 +278,7 @@ sub getTemplate{
 		warn('ZConf-Weather getTemplate:7: The template, "'.$template.'", does not exist');
 		$self->{errror}=7;
 		$self->{errorstring}='The template, "'.$template.'", does not exist';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -321,8 +301,12 @@ The only arguement required is the name of the local.
 sub getWeather{
 	my $self=$_[0];
 	my $name=$_[1];
+	my $function='getWeather';
 
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	#inits the weather object...
 	my $weather=$self->getWeatherObj($name);
@@ -332,7 +316,7 @@ sub getWeather{
 	if (!$arrayref) {
 		$self->{error}=12;
 		$self->{errorString}='Failed to fetch the weather';
-		warn('ZConf-Weather getWeather:12: '.$self->{errorString});
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -355,8 +339,12 @@ The only arguement accepted is the name of the local.
 sub getWeatherObj{
 	my $self=$_[0];
 	my $name=$_[1];
+	my $function='getWeatherObj';
 
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	#error if no local is defined
 	if (!defined($name)) {
@@ -364,7 +352,7 @@ sub getWeatherObj{
 		if ($self->{error}) {
 			$self->{error}=16;
 			$self->{errorString}='getDefaultLocal errors and no local is specified.';
-			warn('ZConf-Weather getWeatherObj:16: '.$self->{errorString});
+			warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 			return undef;
 		}
 	}
@@ -379,7 +367,7 @@ sub getWeatherObj{
 	if (!$returned) {
 		$self->{error}=10;
 		$self->{errorString}='The local "'.$name.'" does not exist.';
-		warn('ZConf-Weather getWeatherObj:10: '.$self->{errorString});
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -397,7 +385,7 @@ sub getWeatherObj{
 		$self->{error}=11;
 		$self->{errorString}='Failed to init the module Weather::Underground.';
 		return undef;
-		warn('ZConf-Weather getWeatherObj:11: '.$self->{errorString});
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 	}
 
 	return $weather;
@@ -429,19 +417,21 @@ it is not defined, ZConf will use the default one.
 sub init{
 	my $self=$_[0];
 	my $set=$_[1];
+	my $function='init';
 
 	#blanks any previous errors
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	my $returned = $self->{zconf}->configExists("weather");
 	if(defined($self->{zconf}->{error})){
-		warn("ZConf-Weather init:2: Could not check if the config 'weather' exists.".
-			 " It failed with '".$self->{zconf}->{error}."', '"
-			 .$self->{zconf}->{errorString}."'");
 		$self->{error}=2;
 		$self->{errorString}="Could not check if the config 'weather' exists.".
 		                     " It failed with '".$self->{zconf}->{error}."', '"
 			                 .$self->{zconf}->{errorString}."'";
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -449,13 +439,11 @@ sub init{
 	if (!$returned) {
 		$self->{zconf}->createConfig("weather");
 		if ($self->{zconf}->{error}) {
-			warn("ZConf-Weather init:2: Could not create the ZConf config 'weather'.".
-				 " It failed with '".$self->{zconf}->{error}."', '"
-				 .$self->{zconf}->{errorString}."'");
 			$self->{error}=2;
 			$self->{errorString}="Could not create the ZConf config 'weather'.".
 			                 " It failed with '".$self->{zconf}->{error}."', '"
 			                 .$self->{zconf}->{errorString}."'";
+			warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 			return undef;
 		}
 	}
@@ -464,13 +452,11 @@ sub init{
 	$self->{zconf}->writeSetFromHash({config=>"weather", set=>$set},{});
 	#error if the write failed
 	if ($self->{zconf}->{error}) {
-		warn("ZConf-Weather init:2: writeSetFromHash failed.".
-			 " It failed with '".$self->{zconf}->{error}."', '"
-			 .$self->{zconf}->{errorString}."'");
 		$self->{error}=2;
 		$self->{errorString}="writeSetFromHash failed.".
 			                 " It failed with '".$self->{zconf}->{error}."', '"
 			                 .$self->{zconf}->{errorString}."'";
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -490,18 +476,20 @@ This gets a list of available locals.
 
 sub listLocals{
 	my $self=$_[0];
+	my $function='listLocals';
 
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	my @localsA=$self->{zconf}->regexVarSearch('weather', '^locals/');
 	if ($self->{zconf}->{error}) {
-		warn('ZConf-Weather listLocals:2: ZConf error listing locals for the config "weather".'.
-			 ' ZConf error="'.$self->{zconf}->{error}.'" '.
-			 'ZConf error string="'.$self->{zconf}->{errorString}.'"');
 		$self->{error}=2;
 		$self->{errorString}='ZConf error listing locals for the config "weather".'.
 			                 ' ZConf error="'.$self->{zconf}->{error}.'" '.
 			                 'ZConf error string="'.$self->{zconf}->{errorString}.'"';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -532,19 +520,21 @@ This lists the available sets.
 
 sub listSets{
 	my $self=$_[0];
+	my $function='listSets';
 
 	#blanks any previous errors
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	my @sets=$self->{zconf}->getAvailableSets('weather');
 	if($self->{zconf}->{error}){
-		warn('ZConf-Weather listSets:2: ZConf error listing sets for the config "weather".'.
-			 ' ZConf error="'.$self->{zconf}->{error}.'" '.
-			 'ZConf error string="'.$self->{zconf}->{errorString}.'"');
 		$self->{error}=2;
 		$self->{errorString}='ZConf error listing sets for the config "weather".'.
 			                 ' ZConf error="'.$self->{zconf}->{error}.'" '.
 			                 'ZConf error string="'.$self->{zconf}->{errorString}.'"';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -564,18 +554,20 @@ This gets a list of available templates.
 
 sub listTemplates{
 	my $self=$_[0];
+	my $function='listTemplates';
 
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	my @templates=$self->{zconf}->regexVarSearch('weather', '^templates/');
 	if ($self->{zconf}->{error}) {
-		warn('ZConf-Weather listTemplates:2: ZConf error listing templates for the config "weather".'.
-			 ' ZConf error="'.$self->{zconf}->{error}.'" '.
-			 'ZConf error string="'.$self->{zconf}->{errorString}.'"');
 		$self->{error}=2;
 		$self->{errorString}='ZConf error listing templates for the config "weather".'.
 			                 ' ZConf error="'.$self->{zconf}->{error}.'" '.
 			                 'ZConf error string="'.$self->{zconf}->{errorString}.'"';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -608,8 +600,12 @@ This makes sure a specified local exists.
 sub localExists{
 	my $self=$_[0];
 	my $local=$_[1];
+	my $function='localExists';
 
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	my @locals=$self->listLocals;
 	if ($self->{error}) {
@@ -651,20 +647,21 @@ is undef, the default set is read.
 sub readSet{
 	my $self=$_[0];
 	my $set=$_[1];
-
+	my $function='readSet';
 	
 	#blanks any previous errors
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	$self->{zconf}->read({config=>'weather', set=>$set});
 	if ($self->{zconf}->{error}) {
-		warn('ZConf-Weather readSet:2: ZConf error reading the config "weather".'.
-			 ' ZConf error="'.$self->{zconf}->{error}.'" '.
-			 'ZConf error string="'.$self->{zconf}->{errorString}.'"');
 		$self->{error}=2;
 		$self->{errorString}='ZConf error reading the config "weather".'.
 			                 ' ZConf error="'.$self->{zconf}->{error}.'" '.
 			                 'ZConf error string="'.$self->{zconf}->{errorString}.'"';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -685,9 +682,13 @@ This acts on a local using it's defined type.
 sub run{
 	my $self=$_[0];
 	my $name=$_[1];
+	my $function='run';
 
 	#blank any previous errors
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	#try to get it if no local is given
 	if (!defined($name)) {
@@ -783,48 +784,52 @@ sub setLocal{
 	if(defined($_[1])){
 		%args= %{$_[1]};
 	}
+	my $function='setLocal';
 
 	#blanks any previous errors
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	#makes sure a locality is defined... this is the only one really needed...
 	if (!defined($args{local})) {
-	    warn('ZConf-Weather addLocal:3: No local defined in %args');
 	    $self->{error}=3;
 	    $self->{errorString}='No local defined in %args';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 	    return undef;
 	}
 
 	#error if the type is not defined
 	if (!defined($args{type})) {
-	    warn('ZConf-Weather addLocal:3: No type defined in %args');
 	    $self->{error}=5;
 	    $self->{errorString}='No type defined in %args';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 	    return undef;
 	}
 
 	#error if the type is not print or template
 	if (($args{type} ne 'print') || ($args{type} ne 'template')) {
-	    warn('ZConf-Weather addLocal:3: "'.$args{type}.' is not a valid type');
 	    $self->{error}=8;
 	    $self->{errorString}='"'.$args{type}.' is not a valid type';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 	    return undef;
 	}
 
 	#make sure it is a legit name
 	if (!defined($self->{zconf}->setNameLegit($args{name}))) {
-	    warn('ZConf-Weather addLocal:4: Name is not a valid name');
 	    $self->{error}=4;
 	    $self->{errorString}='Name is not a valid name.';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 	    return undef;		
 	}
 
 	if ($args{type} eq 'template') {
 		#error if no template is specified
 		if (!defined($args{template})) {
-			warn('ZConf-Weather addLocal:6: No template defined in %args');
 			$self->{error}=6;
 			$self->{errorString}='No template defined in %args';
+			warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 			return undef;
 		}
 
@@ -841,13 +846,11 @@ sub setLocal{
 	#we only need to check this once as if it works once
 	#it will work for the others
 	if ($self->{zconf}->{error}) {
-		warn('ZConf-Weather addLocal:2: Error set the variable "locals/'.$args{name}.'/local"'.
-			 'for "weather" ZConf error="'.$self->{zconf}->{error}.'" '.
-			 'ZConf error string="'.$self->{zconf}->{errorString}.'"');
 		$self->{error}=2;
 		$self->{errorString}=' Error set the variable "locals/'.$args{name}.'/local"'.
 		                     'for "weather" ZConf error="'.$self->{zconf}->{error}.'" '.
 			                 'ZConf error string="'.$self->{zconf}->{errorString}.'"';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -878,35 +881,37 @@ sub setTemplate{
 	my $self=$_[0];
 	my $name=$_[1];
 	my $template=$_[2];
+	my $function='setTemplate';
 
 	#blanks any previous errors
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	#make sure a name for the template is specified
 	if (!defined($name)) {
-		warn('ZConf-Weather getTemplate:6: No template name specified');
 		$self->{error}=6;
 		$self->{errorstring}='No template specified.';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
 	#make sure a template is specified
 	if (!defined($template)) {
-		warn('ZConf-Weather getTemplate:9: No template specified');
 		$self->{error}=9;
 		$self->{errorstring}='No template specified.';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
 	$self->{zconf}->setVar('weather', 'templates/'.$name, $template);
 	if ($self->{zconf}->{error}) {
-		warn('ZConf-Weather setTemplate:2: Error set the variable "templates/'.$name.'"'.
-			 'for "weather" ZConf error="'.$self->{zconf}->{error}.'" '.
-			 'ZConf error string="'.$self->{zconf}->{errorString}.'"');
 		$self->{error}=2;
 		$self->{errorString}=' Error set the variable "templates/'.$name.'"'.
 		                     'for "weather" ZConf error="'.$self->{zconf}->{error}.'" '.
 			                 'ZConf error string="'.$self->{zconf}->{errorString}.'"';
+		warn($self->{module}.' '.$function.':'.$self->{error}.': '.$self->{errorString});
 		return undef;
 	}
 
@@ -931,8 +936,12 @@ This makes sure a specified template exists.
 sub templateExists{
 	my $self=$_[0];
 	my $template=$_[1];
+	my $function='templateExists';
 
 	$self->errorblank;
+	if ($self->{error}) {
+		warn($self->{module}.' '.$function.': A permanent error is set');
+	}
 
 	my @templates=$self->listTemplates;
 	if ($self->{error}) {
@@ -966,6 +975,10 @@ It does the following.
 #blanks the error flags
 sub errorblank{
         my $self=$_[0];
+
+		if ($self->{perror}) {
+			return undef;
+		}
 
         $self->{error}=undef;
         $self->{errorString}="";

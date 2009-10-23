@@ -1,5 +1,12 @@
 Revision history for ZConf-Weather
 
+1.0.0	2009-10-23/15:20
+		-Clean up warings.
+		-If new does not complete, a permanent error is set.
+		-Autoinit now happens automatically.
+		-Set is no longer selectable via new.
+		-The 'zconf' value in the new args hash is now a ZConf object.
+
 0.1.1	2009-09/01:00
 		-Correct the manifest.
 
